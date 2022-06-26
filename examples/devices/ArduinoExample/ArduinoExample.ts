@@ -1179,8 +1179,10 @@ export class DeviceClass extends DeviceClassBase implements IDeviceClass {
          deviceName = 'ADAFruit Feather M0 Express';
       else if (vid === '239A' && pid === '8022')
          deviceName = 'ADAFruit Feather M4';
-      else if (vid === '1B4F' && pid === 'F016')
+         else if (vid === '1B4F' && pid === 'F016')
          deviceName = 'Sparkfun Thing Plus SAMD51';
+      else if (vid === '16C0' && pid === '0483')
+         deviceName = 'Teensy_4_1';
       else {
          callback(null, null); // Did not find one of our devices on this connection
          return;

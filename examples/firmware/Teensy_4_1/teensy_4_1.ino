@@ -40,7 +40,7 @@ For a pin layout see https://www.pjrc.com/teensy-4-1-released/.
 int LEDpin = 5;
 int PWMpin = 19;
 const int readPin1 = A0;
-const int readPin2 = A1;
+const int readPin2 = A2;
 
 #endif // ADC_TIMER
 
@@ -54,8 +54,8 @@ std::vector<double> gGains(kADCChannels, 1.0); // no gain set for now.
 const int kDefaultADCPointsPerSec = 100;
 int gADCPointsPerSec = kDefaultADCPointsPerSec; //~5000 max with 2 samples (1 point) per packet
 const int kSampleRates[] = {10000, 4000, 2000, 1000, 400, 200, 100};
-const int kSamplePeriodus = 1.0 / kDefaultADCPointsPerSec * 1e6 ;
 const int kNSampleRates = sizeof(kSampleRates) / sizeof(int);
+const int kSamplePeriodus = 1.0 / kDefaultADCPointsPerSec * 1e6 ;
 const int kADCStartChan = 2; //A1
 const int kADCEndChan = kADCStartChan + kADCChannels;
 const int kBytesPerSample = sizeof(int16_t);
@@ -203,8 +203,6 @@ void setup()
   adc->adc1->setConversionSpeed(ADC_CONVERSION_SPEED::VERY_HIGH_SPEED); // change the conversion speed
   adc->adc1->setSamplingSpeed(ADC_SAMPLING_SPEED::VERY_HIGH_SPEED);     // change the sampling speed
 
-  doStart(kDefaultADCPointsPerSec);
-
 #endif // ADC_TIMER
 }
 
@@ -220,13 +218,16 @@ void StartSampling()
   interruptTimer.begin(mockSampleData, kSamplePeriodus);
 #endif // INTERRUPT_TIMER
 
-  gState = kWaitingForUSBSOF;
+doStart(gADCPointsPerSec);
+gState = kWaitingForUSBSOF;
 
-  digitalWrite(ledPin, HIGH);
+digitalWrite(ledPin, HIGH);
 }
 
 void StopSampling()
 {
+doStop();
+
   gState = kIdle;
   gFirstSampleTimeRequested = false;
 
@@ -265,7 +266,8 @@ void adc0_isr()
   adc_val = (int16_t)ADC1_R0;
   int16_t iResult = (adc_val << 4) - 0x8000;
   gSampleBuffers[0].Push(iResult);
-  digitalWrite(outputTestPin, gUSBBPinState = !gUSBBPinState);
+  //digitalWrite(outputTestPin, gUSBBPinState = !gUSBBPinState);
+  asm("DSB");
 }
 
 void adc1_isr()
@@ -273,7 +275,8 @@ void adc1_isr()
   adc_val = (int16_t)ADC2_R0;
   int16_t iResult = (adc_val << 4) - 0x8000;
   gSampleBuffers[1].Push(iResult);
-  digitalWrite(outputTestPin, gUSBBPinState = !gUSBBPinState);
+  //digitalWrite(outputTestPin, gUSBBPinState = !gUSBBPinState);
+  asm("DSB");
 }
 
 // TODO: provide a multiplex example for when using more than 2 channels.
@@ -291,7 +294,14 @@ void doStart(int freq)
   adc->adc1->startTimer(freq);
 }
 
+void doStop()
+{
+adc->adc0->stopTimer();
+adc->adc1->stopTimer();
+}
+
 #endif // ADC_TIMER
+
 
 void loop()
 {
@@ -320,7 +330,7 @@ void loop()
       break;
     case 'v': //version info as JSON
       Serial.print("{");
-      Serial.print("\"deviceClass\": \"Teensy_4\",");
+      Serial.print("\"deviceClass\": \"Arduino_Example\",");
       Serial.print("\"deviceName\": \"Teensy 4.1\",");
       Serial.print("\"version\": \"" + String(kFWVersion) + "\",");
       Serial.print("\"numberOfChannels\": " + String(kADCChannels) + ",");
@@ -331,19 +341,19 @@ void loop()
       Packet::ResetPacketCount(); //new session
 
       break;
-    // case '~': //sample rate
-    // {
-    //   auto rateChar = cmdBuf[1]; //'0123456'
-    //   unsigned int index = rateChar - '0';
-    //   if (index < sizeof(kSampleRates) / sizeof(int))
-    //     gADCPointsPerSec = kSampleRates[index];
-    //   if (gADCPointsPerSec > 100)
-    //     gADCPointsPerPacket = kPointsPerMediumSizePacket;
-    //   else
-    //     gADCPointsPerPacket = kPointsPerPacket;
+    case '~': //sample rate
+    {
+      auto rateChar = cmdBuf[1]; //'0123456'
+      unsigned int index = rateChar - '0';
+      if (index < sizeof(kSampleRates) / sizeof(int))
+        gADCPointsPerSec = kSampleRates[index];
+      if (gADCPointsPerSec > 100)
+        gADCPointsPerPacket = kPointsPerMediumSizePacket;
+      else
+        gADCPointsPerPacket = kPointsPerPacket;
 
-    //   break;
-    // }
+      break;
+    }
     default:
       break;
     }
